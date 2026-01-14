@@ -394,6 +394,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            flex-wrap: wrap;
         }
 
         .modal-tech-name {
@@ -447,6 +448,49 @@
             font-weight: 600;
         }
 
+        .modal-tactics-grid {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .modal-tactic-badge {
+            background: rgba(76, 175, 80, 0.15);
+            border: 1px solid rgba(76, 175, 80, 0.4);
+            color: #4caf50;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .modal-kill-chain-grid {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .modal-kill-chain-badge {
+            background: rgba(255, 152, 0, 0.15);
+            border: 1px solid rgba(255, 152, 0, 0.4);
+            color: #ff9800;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .stix-id-box {
+            background: rgba(255, 255, 255, 0.05);
+            border-left: 3px solid var(--accent);
+            padding: 12px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: #00ffff;
+            word-break: break-all;
+        }
+
         .subtechniques-in-modal {
             display: flex;
             flex-direction: column;
@@ -490,7 +534,7 @@
         .external-ref-item {
             background: rgba(255, 255, 255, 0.03);
             border-radius: 6px;
-            padding: 10px 12px;
+            padding: 12px;
             border-left: 3px solid rgba(0, 212, 255, 0.5);
         }
 
@@ -498,18 +542,27 @@
             font-weight: 600;
             color: var(--accent);
             font-size: 0.9rem;
+            margin-bottom: 4px;
         }
 
         .external-ref-desc {
             font-size: 0.85rem;
             color: #ccc;
-            margin-top: 4px;
+            margin-top: 6px;
+            line-height: 1.4;
+        }
+
+        .external-ref-link {
+            margin-top: 8px;
         }
 
         .external-ref-link a {
             font-size: 0.85rem;
             color: #00ffff;
             text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
         }
 
         .external-ref-link a:hover {
@@ -860,10 +913,6 @@
                 const bodyEl = document.getElementById('modalBody');
                 const mitreLink = document.getElementById('mitreLink');
 
-                const tacticLabel = (tech.tactics && tech.tactics.length > 0)
-                    ? humanizeTactic(tech.tactics[0])
-                    : '';
-
                 // Заголовок модалки
                 titleEl.innerHTML = `
                     <i class="fas fa-info-circle"></i>
@@ -872,12 +921,11 @@
 
                 let modalBody = '';
 
-                // Базовый блок: ID + тактика
+                // 1. ID и основная информация
                 modalBody += `
                     <div class="modal-tech-id">
                         <i class="fas fa-shield-alt"></i>
                         <span>${tech.id || ''}</span>
-                        ${tacticLabel ? `<span class="badge bg-info ms-2">${tacticLabel}</span>` : ''}
                     </div>
                 `;
 
@@ -885,7 +933,7 @@
                     modalBody += `<div class="modal-tech-name">${tech.name}</div>`;
                 }
 
-                // Описание
+                // 2. Описание
                 if (tech.description) {
                     modalBody += `
                         <div class="modal-section">
@@ -900,13 +948,28 @@
                     `;
                 }
 
-                // Платформы
+                // 3. Тактики (Tactics)
+                if (tech.tactics && tech.tactics.length > 0) {
+                    modalBody += `
+                        <div class="modal-section">
+                            <div class="modal-section-title">
+                                <i class="fas fa-tasks"></i>
+                                Тактики (${tech.tactics.length})
+                            </div>
+                            <div class="modal-tactics-grid">
+                                ${tech.tactics.map(t => `<div class="modal-tactic-badge">${humanizeTactic(t)}</div>`).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // 4. Платформы
                 if (tech.platforms && tech.platforms.length > 0) {
                     modalBody += `
                         <div class="modal-section">
                             <div class="modal-section-title">
                                 <i class="fas fa-microchip"></i>
-                                Платформы
+                                Платформы (${tech.platforms.length})
                             </div>
                             <div class="modal-platforms">
                                 ${tech.platforms.map(p => `<div class="modal-platform-badge">${p}</div>`).join('')}
@@ -915,7 +978,22 @@
                     `;
                 }
 
-                // Detection
+                // 5. Kill Chain Phases
+                if (tech.kill_chain_phases && tech.kill_chain_phases.length > 0) {
+                    modalBody += `
+                        <div class="modal-section">
+                            <div class="modal-section-title">
+                                <i class="fas fa-link"></i>
+                                Kill Chain Phases (${tech.kill_chain_phases.length})
+                            </div>
+                            <div class="modal-kill-chain-grid">
+                                ${tech.kill_chain_phases.map(k => `<div class="modal-kill-chain-badge">${humanizeTactic(k)}</div>`).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // 6. Detection
                 if (tech.detection && tech.detection !== 'Нет данных о детекции') {
                     modalBody += `
                         <div class="modal-section">
@@ -930,22 +1008,35 @@
                     `;
                 }
 
-                // External references
+                // 7. STIX ID
+                if (tech.stix_id) {
+                    modalBody += `
+                        <div class="modal-section">
+                            <div class="modal-section-title">
+                                <i class="fas fa-fingerprint"></i>
+                                STIX ID
+                            </div>
+                            <div class="stix-id-box">${tech.stix_id}</div>
+                        </div>
+                    `;
+                }
+
+                // 8. External References
                 if (tech.external_references && tech.external_references.length > 0) {
                     modalBody += `
                         <div class="modal-section">
                             <div class="modal-section-title">
                                 <i class="fas fa-book"></i>
-                                Источники
+                                Источники (${tech.external_references.length})
                             </div>
                             <div class="external-ref-list">
-                                ${tech.external_references.map(ref => `
+                                ${tech.external_references.map((ref, idx) => `
                                     <div class="external-ref-item">
                                         <div class="external-ref-title">
-                                            ${ref.external_id || ref.source_name || 'Источник'}
+                                            [${idx + 1}] ${ref.external_id || ref.source_name || 'Источник'}
                                         </div>
                                         ${ref.description ? `<div class="external-ref-desc">${ref.description}</div>` : ''}
-                                        ${ref.url ? `<div class="external-ref-link"><a href="${ref.url}" target="_blank" rel="noopener noreferrer">Открыть источник</a></div>` : ''}
+                                        ${ref.url ? `<div class="external-ref-link"><a href="${ref.url}" target="_blank" rel="noopener noreferrer"><i class="fas fa-external-link-alt"></i> Открыть</a></div>` : ''}
                                     </div>
                                 `).join('')}
                             </div>
@@ -953,7 +1044,7 @@
                     `;
                 }
 
-                // Подтехники (только если это основная техника)
+                // 9. Подтехники
                 if (tech.subtechniques && tech.subtechniques.length > 0) {
                     modalBody += `
                         <div class="modal-section">
