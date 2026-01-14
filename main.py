@@ -49,6 +49,8 @@ class AppState:
     update_count: int = 0
     # Индекс для быстрого поиска техник по ID
     technique_index: Dict[str, Dict] = {}
+    # Индекс для быстрого поиска подтехник по ID
+    subtechnique_index: Dict[str, Dict] = {}
 
 
 # Создание директории кэша
@@ -143,6 +145,7 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
         tactics: Dict[str, Dict] = {}
         matrix: Dict[str, List[Dict]] = {}
         technique_index: Dict[str, Dict] = {}
+        subtechnique_index: Dict[str, Dict] = {}
 
         objects = raw_data.get("objects", [])
 
@@ -218,16 +221,16 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
 
         # Индексируем техники и подтехники по ID для быстрого поиска
         for tech_id, tech_data in techniques.items():
-            technique_index[tech_data["id"].lower()] = tech_data
+            technique_index[tech_data["id"].upper()] = tech_data
 
         for sub_id, sub_data in subtechniques.items():
-            technique_index[sub_data["id"].lower()] = sub_data
+            subtechnique_index[sub_data["id"].upper()] = sub_data
 
         # Второй проход: строим матрицу с подтехниками
         for tech_obj_id, technique in techniques.items():
             technique_subtechniques = []
             for sub_obj_id, subtech in subtechniques.items():
-                # Сравниваем ATT&CK ID подптехники и техники по префиксу (T1234.xx начинается с T1234)
+                # Сравниваем ATT&CK ID подпотехники и техники по префиксу (T1234.xx начинается с T1234)
                 if subtech["id"].startswith(technique["id"] + "."):
                     technique_subtechniques.append(
                         {
@@ -275,6 +278,7 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
             "tactics": tactics,
             "matrix": matrix,
             "technique_index": technique_index,  # Добавляем индекс в результат
+            "subtechnique_index": subtechnique_index,  # Добавляем индекс подтехник
             "statistics": {
                 "total_tactics": len(tactics),
                 "total_techniques": len(techniques),
@@ -293,8 +297,8 @@ def save_to_cache(data: Dict) -> None:
     """Сохраняет данные в кэш"""
 
     try:
-        # Не сохраняем индекс в кэш, он будет пересчитан при загрузке
-        cache_data = {k: v for k, v in data.items() if k != "technique_index"}
+        # Не сохраняем индексы в кэш, они будут пересчитаны при загрузке
+        cache_data = {k: v for k, v in data.items() if k not in ["technique_index", "subtechnique_index"]}
 
         with open(CACHE_FILE, "w", encoding="utf-8") as f:
             json.dump(cache_data, f, ensure_ascii=False, indent=2)
@@ -341,6 +345,7 @@ async def update_matrix_task() -> None:
                     if parsed_data:
                         app.state.state.matrix_data = parsed_data
                         app.state.state.technique_index = parsed_data.get("technique_index", {})
+                        app.state.state.subtechnique_index = parsed_data.get("subtechnique_index", {})
                         app.state.state.last_update = datetime.now()
                         app.state.state.update_count += 1
                         save_to_cache(parsed_data)
@@ -364,17 +369,21 @@ async def lifespan(app: FastAPI):
 
     cached_data = load_from_cache()
     if cached_data:
-        # Пересчитываем индекс при загрузке из кэша
+        # Пересчитываем индексы при загрузке из кэша
         app.state.state.matrix_data = cached_data
         app.state.state.last_update = datetime.now()
-        # Пересчитываем индекс
+        
+        # Пересчитываем индексы
         app.state.state.technique_index = {}
+        app.state.state.subtechnique_index = {}
+        
         for tactics_dict in cached_data.get("matrix", {}).values():
             for tech in tactics_dict:
-                app.state.state.technique_index[tech["id"].lower()] = tech
+                app.state.state.technique_index[tech["id"].upper()] = tech
                 for sub in tech.get("subtechniques", []):
-                    app.state.state.technique_index[sub["id"].lower()] = sub
-        logger.info("✅ Матрица загружена из кэша")
+                    app.state.state.subtechnique_index[sub["id"].upper()] = sub
+        
+        logger.info(f"✅ Матрица загружена из кэша. Индекс содержит {len(app.state.state.technique_index)} техник и {len(app.state.state.subtechnique_index)} подтехник")
     else:
         raw_data = await download_matrix()
         if raw_data:
@@ -382,6 +391,7 @@ async def lifespan(app: FastAPI):
             if parsed_data:
                 app.state.state.matrix_data = parsed_data
                 app.state.state.technique_index = parsed_data.get("technique_index", {})
+                app.state.state.subtechnique_index = parsed_data.get("subtechnique_index", {})
                 app.state.state.last_update = datetime.now()
                 save_to_cache(parsed_data)
 
@@ -448,8 +458,8 @@ async def get_tactic(tactic: str) -> Dict:
 @app.get("/api/matrix/technique/{technique_id}", tags=["Matrix"])
 async def get_technique(technique_id: str) -> Dict:
     """
-    Получить техничику по ID (T1234 или T1234.001, etc)
-    Использует индекс для быстрого поиска
+    Получить технику или подтехнику по ID (T1234 или T1234.001, etc)
+    Использует индексы для быстрого поиска
     """
     if not app.state.state.matrix_data:
         raise HTTPException(status_code=503, detail="Матрица еще не загружена")
@@ -457,11 +467,18 @@ async def get_technique(technique_id: str) -> Dict:
     # Нормализуем ID для поиска
     search_id = technique_id.upper()
 
-    # Ищем в индексе
+    # Сначала ищем в индексе подтехник (они более специфичны)
+    if search_id in app.state.state.subtechnique_index:
+        logger.info(f"✅ Найдена подтехника {search_id} в индексе")
+        return app.state.state.subtechnique_index[search_id]
+
+    # Затем ищем в индексе техник
     if search_id in app.state.state.technique_index:
+        logger.info(f"✅ Найдена техника {search_id} в индексе")
         return app.state.state.technique_index[search_id]
 
     # Фолбэк: полный поиск (на случай если индекс не обновился)
+    logger.warning(f"⚠️  {search_id} не найдена в индексах, выполняю полный поиск...")
     matrix = app.state.state.matrix_data.get("matrix", {})
     for _, techniques in matrix.items():
         for tech in techniques:
@@ -472,7 +489,7 @@ async def get_technique(technique_id: str) -> Dict:
                     return sub
 
     # Не нашли
-    logger.warning(f"Техника '{technique_id}' не найдена. Индекс содержит {len(app.state.state.technique_index)} техник")
+    logger.error(f"❌ Техника '{technique_id}' не найдена. Индекс содержит {len(app.state.state.technique_index)} техник и {len(app.state.state.subtechnique_index)} подтехник")
     raise HTTPException(status_code=404, detail=f"Техника '{technique_id}' не найдена")
 
 
@@ -539,6 +556,7 @@ async def refresh_matrix() -> Dict:
             if parsed_data:
                 app.state.state.matrix_data = parsed_data
                 app.state.state.technique_index = parsed_data.get("technique_index", {})
+                app.state.state.subtechnique_index = parsed_data.get("subtechnique_index", {})
                 app.state.state.last_update = datetime.now()
                 app.state.state.update_count += 1
                 save_to_cache(parsed_data)
