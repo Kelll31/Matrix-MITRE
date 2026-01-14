@@ -71,7 +71,10 @@ class MatrixStats(BaseModel):
 class Technique(BaseModel):
     id: str
     name: str
+    description: str
     platforms: List[str]
+    tactics: List[str]
+    mitre_url: Optional[str] = None
     subtechniques: Optional[List["Technique"]] = None
 
 
@@ -112,7 +115,16 @@ async def download_matrix() -> Optional[Dict]:
 
 
 def parse_matrix(raw_data: Dict) -> Optional[Dict]:
-    """Парсит матрицу из сырых данных с иерархией: Тактика -> Техника -> Подтехника"""
+    """Парсит матрицу из сырых данных с иерархией: Тактика -> Техника -> Подтехника
+
+    Собираем:
+    - ATT&CK ID (Txxxx/Txxxx.yy)
+    - name
+    - description
+    - tactics (phase_name)
+    - platforms (x_mitre_platforms)
+    - external маппинг и mitre_url
+    """
 
     try:
         techniques: Dict[str, Dict] = {}
@@ -122,7 +134,7 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
 
         objects = raw_data.get("objects", [])
 
-        # Первый проход: собираем объекты
+        # Первый проход: собираем тактики и сырые техники
         for obj in objects:
             obj_type = obj.get("type", "")
 
@@ -142,24 +154,33 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
 
                 external_refs = obj.get("external_references", [])
 
-                # Ищем именно ATT&CK ID (Txxxx/Txxxx.yy), игнорируя другие external_id
+                # Ищем именно ATT&CK ID (Txxxx/Txxxx.yy) и URL
                 external_id = "N/A"
+                mitre_url = None
                 for ref in external_refs:
                     source_name = ref.get("source_name", "").lower()
                     if source_name in {"mitre-attack", "attack", "mitre"}:
                         external_id = ref.get("external_id", external_id)
+                        mitre_url = ref.get("url", mitre_url)
                         break
                 if external_id == "N/A" and external_refs:
                     # Фолбэк на первый, если профильный не нашли
-                    external_id = external_refs[0].get("external_id", "N/A")
+                    first = external_refs[0]
+                    external_id = first.get("external_id", "N/A")
+                    mitre_url = first.get("url", mitre_url)
 
                 tech_data = {
                     "id": external_id,
                     "name": obj.get("name", "Unknown"),
-                    "description": obj.get("description", "")[:300],
+                    "description": obj.get("description", "") or "Описание недоступно в STIX JSON.",
                     "platforms": obj.get("x_mitre_platforms", []),
                     "tactics": tactic_names,
+                    "mitre_url": mitre_url,
                 }
+
+                # Если external_id не начинается с T, толку от него мало для матрицы
+                if not external_id.startswith("T"):
+                    continue
 
                 if is_subtechnique:
                     subtechniques[obj.get("id")] = tech_data
@@ -167,29 +188,41 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
                     techniques[obj.get("id")] = tech_data
 
         # Второй проход: строим матрицу с подтехниками
-        for tech_id, technique in techniques.items():
+        for tech_obj_id, technique in techniques.items():
             technique_subtechniques = []
-            for subtech_id, subtech in subtechniques.items():
+            for sub_obj_id, subtech in subtechniques.items():
                 # Сравниваем ATT&CK ID подптехники и техники по префиксу (T1234.xx начинается с T1234)
                 if subtech["id"].startswith(technique["id"] + "."):
                     technique_subtechniques.append(
                         {
                             "id": subtech["id"],
                             "name": subtech["name"],
+                            "description": subtech["description"],
                             "platforms": subtech["platforms"],
+                            "tactics": subtech["tactics"],
+                            "mitre_url": subtech["mitre_url"],
                         }
                     )
 
             technique_obj = {
                 "id": technique["id"],
                 "name": technique["name"],
+                "description": technique["description"],
                 "platforms": technique["platforms"],
-                "subtechniques": technique_subtechniques,
+                "tactics": technique["tactics"],
+                "mitre_url": technique["mitre_url"],
+                "subtechniques": sorted(
+                    technique_subtechniques, key=lambda x: x["id"]
+                ),
             }
 
             for tactic in technique["tactics"]:
                 if tactic in matrix:
                     matrix[tactic].append(technique_obj)
+
+        # Сортируем техники внутри каждой тактики по ID
+        for tactic_key in matrix:
+            matrix[tactic_key].sort(key=lambda x: x["id"])
 
         # Подсчёт статистики
         total_subtechniques = sum(
@@ -361,15 +394,13 @@ async def get_technique(technique_id: str) -> Dict:
 
     matrix = app.state.state.matrix_data.get("matrix", {})
 
-    for tactic_key, techniques in matrix.items():
+    for _, techniques in matrix.items():
         for tech in techniques:
             if tech["id"].lower() == technique_id.lower():
-                return {
-                    "technique_id": technique_id,
-                    "name": tech["name"],
-                    "platforms": tech["platforms"],
-                    "subtechniques": tech.get("subtechniques", []),
-                }
+                return tech
+            for sub in tech.get("subtechniques", []):
+                if sub["id"].lower() == technique_id.lower():
+                    return sub
 
     raise HTTPException(status_code=404, detail=f"Техника '{technique_id}' не найдена")
 
