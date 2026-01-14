@@ -10,6 +10,7 @@ import asyncio
 import aiohttp
 import logging
 from datetime import datetime
+from contextlib import asynccontextmanager
 from typing import Dict, List, Optional
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,22 +22,6 @@ from pathlib import Path
 # Логирование
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Инициализация FastAPI
-app = FastAPI(
-    title="MITRE ATT&CK Matrix API",
-    description="API для работы с матрицей MITRE ATT&CK",
-    version="1.0.0",
-)
-
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Константы
 GITHUB_URL = "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/enterprise-attack/enterprise-attack.json"
@@ -63,8 +48,6 @@ class AppState:
     is_updating: bool = False
     update_count: int = 0
 
-
-app.state.state = AppState()
 
 # Создание директории кэша
 CACHE_DIR.mkdir(exist_ok=True)
@@ -236,7 +219,7 @@ def load_from_cache() -> Optional[Dict]:
     return None
 
 
-async def update_matrix_task(_: BackgroundTasks) -> None:
+async def update_matrix_task() -> None:
     """Фоновая задача обновления матрицы"""
 
     while True:
@@ -266,10 +249,12 @@ async def update_matrix_task(_: BackgroundTasks) -> None:
             app.state.state.is_updating = False
 
 
-@app.on_event("startup")
-async def startup_event() -> None:
-    """Инициализация при запуске приложения"""
-
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Управление жизненным циклом приложения - НОВЫЙ СТИЛЬ"""
+    
+    # Инициализация приложения (startup)
+    app.state.state = AppState()
     logger.info("🚀 Запуск приложения...")
 
     cached_data = load_from_cache()
@@ -286,11 +271,35 @@ async def startup_event() -> None:
                 app.state.state.last_update = datetime.now()
                 save_to_cache(parsed_data)
 
-    asyncio.create_task(update_matrix_task(BackgroundTasks()))
+    # Запуск фоновой задачи
+    asyncio.create_task(update_matrix_task())
+    
+    yield  # Приложение работает здесь
+    
+    # Завершение (shutdown)
+    logger.info("🛑 Завершение работы приложения...")
 
 
-@app.get("/")
-async def root() -> HTMLResponse | Dict[str, str]:
+# Инициализация FastAPI с нововым lifespan
+app = FastAPI(
+    title="MITRE ATT&CK Matrix API",
+    description="API для работы с матрицей MITRE ATT&CK",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/", response_model=None)
+async def root():
     """Возвращает главную страницу"""
 
     html_path = Path("frontend/index.html")
