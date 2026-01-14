@@ -390,7 +390,7 @@
             color: var(--accent);
             font-weight: 700;
             font-size: 1.1rem;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             display: flex;
             align-items: center;
             gap: 10px;
@@ -479,6 +479,41 @@
             color: #fff;
             font-weight: 600;
             margin-bottom: 8px;
+        }
+
+        .external-ref-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .external-ref-item {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            padding: 10px 12px;
+            border-left: 3px solid rgba(0, 212, 255, 0.5);
+        }
+
+        .external-ref-title {
+            font-weight: 600;
+            color: var(--accent);
+            font-size: 0.9rem;
+        }
+
+        .external-ref-desc {
+            font-size: 0.85rem;
+            color: #ccc;
+            margin-top: 4px;
+        }
+
+        .external-ref-link a {
+            font-size: 0.85rem;
+            color: #00ffff;
+            text-decoration: none;
+        }
+
+        .external-ref-link a:hover {
+            text-decoration: underline;
         }
 
         /* Search Results */
@@ -663,6 +698,9 @@
                 </div>
                 <div class="modal-body" id="modalBody"></div>
                 <div class="modal-footer">
+                    <a href="#" target="_blank" rel="noopener noreferrer" id="mitreLink" class="btn btn-outline-info" style="display:none;">
+                        <i class="fas fa-external-link-alt"></i> Открыть на mitre.org
+                    </a>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
                 </div>
             </div>
@@ -756,14 +794,14 @@
 
             techniques.forEach(tech => {
                 const hasSubtechniques = tech.subtechniques && tech.subtechniques.length > 0;
+                const safeName = tech.name.replace(/'/g, "\\'");
                 html += `
                     <div class="technique-item ${hasSubtechniques ? 'collapsed' : ''}">
-                        <div class="technique-id">
-                            <span onclick="showTechniqueDetails('${tech.id}', '${tech.name.replace(/'/g, "\\'")}')">📋</span>
+                        <div class="technique-id" onclick="event.stopPropagation(); showTechniqueDetails('${tech.id}')">
+                            <span>📋 ${tech.id}</span>
                             ${hasSubtechniques ? '<span class="expand-icon"><i class="fas fa-chevron-down"></i></span>' : ''}
                         </div>
-                        <div class="technique-name" onclick="showTechniqueDetails('${tech.id}', '${tech.name.replace(/'/g, "\\'")}')">${tech.id}</div>
-                        <div class="technique-name" onclick="showTechniqueDetails('${tech.id}', '${tech.name.replace(/'/g, "\\'")}')">▸ ${tech.name}</div>
+                        <div class="technique-name" onclick="showTechniqueDetails('${tech.id}')">${tech.name}</div>
                         ${tech.platforms && tech.platforms.length > 0 ? `
                             <div class="platforms">
                                 ${tech.platforms.map(p => `<span class="platform-badge">${p}</span>`).join('')}
@@ -772,7 +810,7 @@
                         ${hasSubtechniques ? `
                             <div class="subtechniques-list">
                                 ${tech.subtechniques.map(sub => `
-                                    <div class="subtechnique-item" onclick="showTechniqueDetails('${sub.id}', '${sub.name.replace(/'/g, "\\'")}')", event.stopPropagation()">
+                                    <div class="subtechnique-item" onclick="event.stopPropagation(); showTechniqueDetails('${sub.id}')">
                                         <div class="subtechnique-id">${sub.id}</div>
                                         <div class="subtechnique-name">• ${sub.name}</div>
                                         ${sub.platforms && sub.platforms.length > 0 ? `
@@ -798,7 +836,7 @@
         function attachEventListeners() {
             document.querySelectorAll('.technique-item').forEach(el => {
                 el.addEventListener('click', function(e) {
-                    if (e.target.closest('.expand-icon') || (e.target.closest('.technique-id') && e.target.textContent.includes('chevron'))) {
+                    if (e.target.closest('.expand-icon')) {
                         e.stopPropagation();
                         this.classList.toggle('expanded');
                     }
@@ -806,22 +844,70 @@
             });
         }
 
-        async function showTechniqueDetails(techId, techName) {
+        function humanizeTactic(tactic) {
+            if (!tactic) return '';
+            return tactic
+                .replace(/-/g, ' ')
+                .replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        async function showTechniqueDetails(techId) {
             try {
                 const res = await axios.get(`${API_BASE}/matrix/technique/${techId}`);
                 const tech = res.data;
 
-                let modalBody = `
-                    <div class="modal-tech-id">
-                        <i class="fas fa-shield-alt"></i> ${tech.technique_id}
-                    </div>
-                    <div class="modal-tech-name">${tech.name}</div>
+                const titleEl = document.getElementById('modalTitle');
+                const bodyEl = document.getElementById('modalBody');
+                const mitreLink = document.getElementById('mitreLink');
+
+                const tacticLabel = (tech.tactics && tech.tactics.length > 0)
+                    ? humanizeTactic(tech.tactics[0])
+                    : '';
+
+                // Заголовок модалки
+                titleEl.innerHTML = `
+                    <i class="fas fa-info-circle"></i>
+                    ${tech.id || ''}${tech.name ? ' — ' + tech.name : ''}
                 `;
 
+                let modalBody = '';
+
+                // Базовый блок: ID + тактика
+                modalBody += `
+                    <div class="modal-tech-id">
+                        <i class="fas fa-shield-alt"></i>
+                        <span>${tech.id || ''}</span>
+                        ${tacticLabel ? `<span class="badge bg-info ms-2">${tacticLabel}</span>` : ''}
+                    </div>
+                `;
+
+                if (tech.name) {
+                    modalBody += `<div class="modal-tech-name">${tech.name}</div>`;
+                }
+
+                // Описание
+                if (tech.description) {
+                    modalBody += `
+                        <div class="modal-section">
+                            <div class="modal-section-title">
+                                <i class="fas fa-align-left"></i>
+                                Описание
+                            </div>
+                            <div class="modal-section-content">
+                                ${tech.description.replace(/\n/g, '<br>')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Платформы
                 if (tech.platforms && tech.platforms.length > 0) {
                     modalBody += `
                         <div class="modal-section">
-                            <div class="modal-section-title"><i class="fas fa-microchip"></i> Платформы</div>
+                            <div class="modal-section-title">
+                                <i class="fas fa-microchip"></i>
+                                Платформы
+                            </div>
                             <div class="modal-platforms">
                                 ${tech.platforms.map(p => `<div class="modal-platform-badge">${p}</div>`).join('')}
                             </div>
@@ -829,13 +915,55 @@
                     `;
                 }
 
+                // Detection
+                if (tech.detection && tech.detection !== 'Нет данных о детекции') {
+                    modalBody += `
+                        <div class="modal-section">
+                            <div class="modal-section-title">
+                                <i class="fas fa-search"></i>
+                                Detection
+                            </div>
+                            <div class="modal-section-content">
+                                ${tech.detection.replace(/\n/g, '<br>')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // External references
+                if (tech.external_references && tech.external_references.length > 0) {
+                    modalBody += `
+                        <div class="modal-section">
+                            <div class="modal-section-title">
+                                <i class="fas fa-book"></i>
+                                Источники
+                            </div>
+                            <div class="external-ref-list">
+                                ${tech.external_references.map(ref => `
+                                    <div class="external-ref-item">
+                                        <div class="external-ref-title">
+                                            ${ref.external_id || ref.source_name || 'Источник'}
+                                        </div>
+                                        ${ref.description ? `<div class="external-ref-desc">${ref.description}</div>` : ''}
+                                        ${ref.url ? `<div class="external-ref-link"><a href="${ref.url}" target="_blank" rel="noopener noreferrer">Открыть источник</a></div>` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Подтехники (только если это основная техника)
                 if (tech.subtechniques && tech.subtechniques.length > 0) {
                     modalBody += `
                         <div class="modal-section">
-                            <div class="modal-section-title"><i class="fas fa-list"></i> Подтехники (${tech.subtechniques.length})</div>
+                            <div class="modal-section-title">
+                                <i class="fas fa-list"></i>
+                                Подтехники (${tech.subtechniques.length})
+                            </div>
                             <div class="subtechniques-in-modal">
                                 ${tech.subtechniques.map(sub => `
-                                    <div class="subtechnique-card" onclick="showTechniqueDetails('${sub.id}', '${sub.name.replace(/'/g, "\\'")}')", event.stopPropagation()">
+                                    <div class="subtechnique-card" onclick="event.stopPropagation(); showTechniqueDetails('${sub.id}')">
                                         <div class="subtechnique-card-id">${sub.id}</div>
                                         <div class="subtechnique-card-name">${sub.name}</div>
                                         ${sub.platforms && sub.platforms.length > 0 ? `
@@ -850,11 +978,15 @@
                     `;
                 }
 
-                const titleEl = document.getElementById('modalTitle');
-                const bodyEl = document.getElementById('modalBody');
-
-                titleEl.innerHTML = `<i class="fas fa-info-circle"></i> ${tech.technique_id}`;
                 bodyEl.innerHTML = modalBody;
+
+                // MITRE link в футере
+                if (tech.mitre_url) {
+                    mitreLink.href = tech.mitre_url;
+                    mitreLink.style.display = 'inline-flex';
+                } else {
+                    mitreLink.style.display = 'none';
+                }
 
                 modal.show();
             } catch (error) {
@@ -886,8 +1018,8 @@
                     results.forEach(result => {
                         const tech = result.technique;
                         html += `
-                            <div class="result-item" onclick="showTechniqueDetails('${tech.id}', '${tech.name.replace(/'/g, "\\'")}')", event.stopPropagation()">
-                                <div class="result-tactic">📍 ${result.tactic}</div>
+                            <div class="result-item" onclick="event.stopPropagation(); showTechniqueDetails('${tech.id}')">
+                                <div class="result-tactic">📍 ${humanizeTactic(result.tactic)}</div>
                                 <div class="result-tech-id">${tech.id}</div>
                                 <div class="result-tech-name">${tech.name}</div>
                                 ${tech.platforms && tech.platforms.length > 0 ? `
@@ -899,7 +1031,7 @@
                                     <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(0, 212, 255, 0.2);">
                                         <strong style="color: #aaa; font-size: 0.85rem;">Подтехники:</strong>
                                         ${tech.subtechniques.map(sub => `
-                                            <div style="margin-top: 6px; padding-left: 12px; border-left: 3px solid var(--accent); cursor: pointer;" onclick="showTechniqueDetails('${sub.id}', '${sub.name.replace(/'/g, "\\'")}')", event.stopPropagation()">
+                                            <div style="margin-top: 6px; padding-left: 12px; border-left: 3px solid var(--accent); cursor: pointer;" onclick="event.stopPropagation(); showTechniqueDetails('${sub.id}')">
                                                 <div style="color: var(--accent); font-weight: 600; font-size: 0.85rem;">${sub.id}</div>
                                                 <div style="color: #ccc; font-size: 0.8rem;">${sub.name}</div>
                                             </div>
