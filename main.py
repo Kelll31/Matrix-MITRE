@@ -12,7 +12,7 @@ import logging
 from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Dict, List, Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
@@ -47,6 +47,8 @@ class AppState:
     update_interval: int = UPDATE_INTERVALS["24_hours"]
     is_updating: bool = False
     update_count: int = 0
+    # Индекс для быстрого поиска техник по ID
+    technique_index: Dict[str, Dict] = {}
 
 
 # Создание директории кэша
@@ -68,13 +70,23 @@ class MatrixStats(BaseModel):
     update_count: int
 
 
+class ExternalReference(BaseModel):
+    source_name: str
+    description: Optional[str] = None
+    url: Optional[str] = None
+    external_id: Optional[str] = None
+
+
 class Technique(BaseModel):
     id: str
     name: str
     description: str
-    platforms: List[str]
-    tactics: List[str]
+    platforms: List[str] = []
+    tactics: List[str] = []
     mitre_url: Optional[str] = None
+    detection: Optional[str] = None
+    external_references: List[ExternalReference] = []
+    kill_chain_phases: List[str] = []
     subtechniques: Optional[List["Technique"]] = None
 
 
@@ -117,13 +129,12 @@ async def download_matrix() -> Optional[Dict]:
 def parse_matrix(raw_data: Dict) -> Optional[Dict]:
     """Парсит матрицу из сырых данных с иерархией: Тактика -> Техника -> Подтехника
 
-    Собираем:
+    Собираем расширенные данные:
     - ATT&CK ID (Txxxx/Txxxx.yy)
-    - name
-    - description
-    - tactics (phase_name)
-    - platforms (x_mitre_platforms)
-    - external маппинг и mitre_url
+    - name, description
+    - tactics (phase_name), platforms
+    - detection, external_references
+    - kill_chain_phases
     """
 
     try:
@@ -131,10 +142,11 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
         subtechniques: Dict[str, Dict] = {}
         tactics: Dict[str, Dict] = {}
         matrix: Dict[str, List[Dict]] = {}
+        technique_index: Dict[str, Dict] = {}
 
         objects = raw_data.get("objects", [])
 
-        # Первый проход: собираем тактики и сырые техники
+        # Первый проход: собираем тактики и сырые техники с расширенными данными
         for obj in objects:
             obj_type = obj.get("type", "")
 
@@ -169,6 +181,19 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
                     external_id = first.get("external_id", "N/A")
                     mitre_url = first.get("url", mitre_url)
 
+                # Собираем detection и другие данные
+                detection = obj.get("x_mitre_detection") or "Нет данных о детекции"
+
+                # Форматируем external_references для вывода
+                formatted_refs = []
+                for ref in external_refs:
+                    formatted_refs.append({
+                        "source_name": ref.get("source_name", ""),
+                        "description": ref.get("description"),
+                        "url": ref.get("url"),
+                        "external_id": ref.get("external_id"),
+                    })
+
                 tech_data = {
                     "id": external_id,
                     "name": obj.get("name", "Unknown"),
@@ -176,6 +201,10 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
                     "platforms": obj.get("x_mitre_platforms", []),
                     "tactics": tactic_names,
                     "mitre_url": mitre_url,
+                    "detection": detection,
+                    "external_references": formatted_refs,
+                    "kill_chain_phases": [kc.get("phase_name", "") for kc in kill_chain],
+                    "stix_id": obj.get("id", ""),  # Добавляем STIX ID для отладки
                 }
 
                 # Если external_id не начинается с T, толку от него мало для матрицы
@@ -186,6 +215,13 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
                     subtechniques[obj.get("id")] = tech_data
                 else:
                     techniques[obj.get("id")] = tech_data
+
+        # Индексируем техники и подтехники по ID для быстрого поиска
+        for tech_id, tech_data in techniques.items():
+            technique_index[tech_data["id"].lower()] = tech_data
+
+        for sub_id, sub_data in subtechniques.items():
+            technique_index[sub_data["id"].lower()] = sub_data
 
         # Второй проход: строим матрицу с подтехниками
         for tech_obj_id, technique in techniques.items():
@@ -201,6 +237,9 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
                             "platforms": subtech["platforms"],
                             "tactics": subtech["tactics"],
                             "mitre_url": subtech["mitre_url"],
+                            "detection": subtech["detection"],
+                            "external_references": subtech["external_references"],
+                            "kill_chain_phases": subtech["kill_chain_phases"],
                         }
                     )
 
@@ -211,6 +250,9 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
                 "platforms": technique["platforms"],
                 "tactics": technique["tactics"],
                 "mitre_url": technique["mitre_url"],
+                "detection": technique["detection"],
+                "external_references": technique["external_references"],
+                "kill_chain_phases": technique["kill_chain_phases"],
                 "subtechniques": sorted(
                     technique_subtechniques, key=lambda x: x["id"]
                 ),
@@ -232,6 +274,7 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
         return {
             "tactics": tactics,
             "matrix": matrix,
+            "technique_index": technique_index,  # Добавляем индекс в результат
             "statistics": {
                 "total_tactics": len(tactics),
                 "total_techniques": len(techniques),
@@ -241,6 +284,8 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
 
     except Exception as e:
         logger.error(f"❌ Ошибка при парсинге: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -248,8 +293,11 @@ def save_to_cache(data: Dict) -> None:
     """Сохраняет данные в кэш"""
 
     try:
+        # Не сохраняем индекс в кэш, он будет пересчитан при загрузке
+        cache_data = {k: v for k, v in data.items() if k != "technique_index"}
+
         with open(CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+            json.dump(cache_data, f, ensure_ascii=False, indent=2)
 
         metadata = {
             "last_update": datetime.now().isoformat(),
@@ -292,6 +340,7 @@ async def update_matrix_task() -> None:
                     parsed_data = parse_matrix(raw_data)
                     if parsed_data:
                         app.state.state.matrix_data = parsed_data
+                        app.state.state.technique_index = parsed_data.get("technique_index", {})
                         app.state.state.last_update = datetime.now()
                         app.state.state.update_count += 1
                         save_to_cache(parsed_data)
@@ -315,8 +364,16 @@ async def lifespan(app: FastAPI):
 
     cached_data = load_from_cache()
     if cached_data:
+        # Пересчитываем индекс при загрузке из кэша
         app.state.state.matrix_data = cached_data
         app.state.state.last_update = datetime.now()
+        # Пересчитываем индекс
+        app.state.state.technique_index = {}
+        for tactics_dict in cached_data.get("matrix", {}).values():
+            for tech in tactics_dict:
+                app.state.state.technique_index[tech["id"].lower()] = tech
+                for sub in tech.get("subtechniques", []):
+                    app.state.state.technique_index[sub["id"].lower()] = sub
         logger.info("✅ Матрица загружена из кэша")
     else:
         raw_data = await download_matrix()
@@ -324,6 +381,7 @@ async def lifespan(app: FastAPI):
             parsed_data = parse_matrix(raw_data)
             if parsed_data:
                 app.state.state.matrix_data = parsed_data
+                app.state.state.technique_index = parsed_data.get("technique_index", {})
                 app.state.state.last_update = datetime.now()
                 save_to_cache(parsed_data)
 
@@ -389,19 +447,32 @@ async def get_tactic(tactic: str) -> Dict:
 
 @app.get("/api/matrix/technique/{technique_id}", tags=["Matrix"])
 async def get_technique(technique_id: str) -> Dict:
+    """
+    Получить техничику по ID (T1234 или T1234.001, etc)
+    Использует индекс для быстрого поиска
+    """
     if not app.state.state.matrix_data:
         raise HTTPException(status_code=503, detail="Матрица еще не загружена")
 
-    matrix = app.state.state.matrix_data.get("matrix", {})
+    # Нормализуем ID для поиска
+    search_id = technique_id.upper()
 
+    # Ищем в индексе
+    if search_id in app.state.state.technique_index:
+        return app.state.state.technique_index[search_id]
+
+    # Фолбэк: полный поиск (на случай если индекс не обновился)
+    matrix = app.state.state.matrix_data.get("matrix", {})
     for _, techniques in matrix.items():
         for tech in techniques:
-            if tech["id"].lower() == technique_id.lower():
+            if tech["id"].upper() == search_id:
                 return tech
             for sub in tech.get("subtechniques", []):
-                if sub["id"].lower() == technique_id.lower():
+                if sub["id"].upper() == search_id:
                     return sub
 
+    # Не нашли
+    logger.warning(f"Техника '{technique_id}' не найдена. Индекс содержит {len(app.state.state.technique_index)} техник")
     raise HTTPException(status_code=404, detail=f"Техника '{technique_id}' не найдена")
 
 
@@ -467,6 +538,7 @@ async def refresh_matrix() -> Dict:
             parsed_data = parse_matrix(raw_data)
             if parsed_data:
                 app.state.state.matrix_data = parsed_data
+                app.state.state.technique_index = parsed_data.get("technique_index", {})
                 app.state.state.last_update = datetime.now()
                 app.state.state.update_count += 1
                 save_to_cache(parsed_data)
@@ -481,7 +553,12 @@ async def refresh_matrix() -> Dict:
 
 
 @app.get("/api/search", tags=["Search"])
-async def search_techniques(q: str) -> Dict:
+async def search_techniques(q: str = Query(..., min_length=1), limit: int = Query(20, ge=1, le=100)) -> Dict:
+    """
+    Поиск техник по названию, ID, описанию или платформам.
+    q: строка для поиска
+    limit: максимум результатов (по умолчанию 20, макс 100)
+    """
     if not app.state.state.matrix_data:
         raise HTTPException(status_code=503, detail="Матрица еще не загружена")
 
@@ -490,10 +567,66 @@ async def search_techniques(q: str) -> Dict:
 
     for tactic, techniques in app.state.state.matrix_data.get("matrix", {}).items():
         for technique in techniques:
-            if query in technique["name"].lower() or query in technique["id"].lower():
+            # Ищем в разных полях
+            match = (
+                query in technique["name"].lower()
+                or query in technique["id"].lower()
+                or query in technique.get("description", "").lower()
+                or any(query in platform.lower() for platform in technique.get("platforms", []))
+            )
+
+            if match:
                 results.append({"tactic": tactic, "technique": technique})
 
-    return {"query": q, "results": results[:20]}
+            # Ищем также в подтехниках
+            if len(results) < limit:
+                for sub in technique.get("subtechniques", []):
+                    sub_match = (
+                        query in sub["name"].lower()
+                        or query in sub["id"].lower()
+                        or query in sub.get("description", "").lower()
+                        or any(query in platform.lower() for platform in sub.get("platforms", []))
+                    )
+                    if sub_match:
+                        results.append({"tactic": tactic, "technique": sub})
+
+            if len(results) >= limit:
+                break
+
+        if len(results) >= limit:
+            break
+
+    return {"query": q, "count": len(results), "results": results[:limit]}
+
+
+@app.get("/api/matrix/tactics/{tactic}/techniques", tags=["Matrix"])
+async def get_tactic_techniques(
+    tactic: str,
+    platform: Optional[str] = Query(None),
+    limit: int = Query(None),
+) -> Dict:
+    """
+    Получить все техники тактики с опциональной фильтрацией по платформе
+    """
+    if not app.state.state.matrix_data:
+        raise HTTPException(status_code=503, detail="Матрица еще не загружена")
+
+    tactic_lower = tactic.lower().replace(" ", "-")
+    matrix = app.state.state.matrix_data.get("matrix", {})
+
+    if tactic_lower not in matrix:
+        raise HTTPException(status_code=404, detail=f"Тактика '{tactic}' не найдена")
+
+    techniques = matrix[tactic_lower]
+
+    # Фильтруем по платформе если указана
+    if platform:
+        techniques = [t for t in techniques if platform.lower() in [p.lower() for p in t.get("platforms", [])]]
+
+    if limit:
+        techniques = techniques[:limit]
+
+    return {"tactic": tactic_lower, "count": len(techniques), "techniques": techniques}
 
 
 try:
