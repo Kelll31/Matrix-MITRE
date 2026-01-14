@@ -271,6 +271,7 @@
             color: #666;
             transition: transform 0.2s ease;
             font-size: 0.8rem;
+            cursor: pointer;
         }
 
         .technique-item.expanded .expand-icon {
@@ -852,7 +853,7 @@
                     <div class="technique-item ${hasSubtechniques ? 'collapsed' : ''}">
                         <div class="technique-id" onclick="event.stopPropagation(); showTechniqueDetails('${tech.id}')">
                             <span>📋 ${tech.id}</span>
-                            ${hasSubtechniques ? '<span class="expand-icon"><i class="fas fa-chevron-down"></i></span>' : ''}
+                            ${hasSubtechniques ? `<span class="expand-icon" onclick="event.stopPropagation(); toggleSubtechniques(event)"><i class="fas fa-chevron-down"></i></span>` : ''}
                         </div>
                         <div class="technique-name" onclick="showTechniqueDetails('${tech.id}')">${tech.name}</div>
                         ${tech.platforms && tech.platforms.length > 0 ? `
@@ -887,21 +888,23 @@
         }
 
         function attachEventListeners() {
-            document.querySelectorAll('.technique-item').forEach(el => {
-                el.addEventListener('click', function(e) {
-                    if (e.target.closest('.expand-icon')) {
-                        e.stopPropagation();
-                        this.classList.toggle('expanded');
-                    }
-                });
-            });
+            // Пусто - обработка через onclick в HTML
+        }
+
+        function toggleSubtechniques(event) {
+            event.stopPropagation();
+            const expandIcon = event.currentTarget;
+            const techniqueItem = expandIcon.closest('.technique-item');
+            if (techniqueItem) {
+                techniqueItem.classList.toggle('expanded');
+            }
         }
 
         function humanizeTactic(tactic) {
             if (!tactic) return '';
             return tactic
                 .replace(/-/g, ' ')
-                .replace(/\b\w/g, c => c.toUpperCase());
+                .replace(/\\b\\w/g, c => c.toUpperCase());
         }
 
         async function showTechniqueDetails(techId) {
@@ -942,7 +945,7 @@
                                 Описание
                             </div>
                             <div class="modal-section-content">
-                                ${tech.description.replace(/\n/g, '<br>')}
+                                ${tech.description.replace(/\\n/g, '<br>')}
                             </div>
                         </div>
                     `;
@@ -1002,7 +1005,7 @@
                                 Detection
                             </div>
                             <div class="modal-section-content">
-                                ${tech.detection.replace(/\n/g, '<br>')}
+                                ${tech.detection.replace(/\\n/g, '<br>')}
                             </div>
                         </div>
                     `;
@@ -1054,7 +1057,7 @@
                             </div>
                             <div class="subtechniques-in-modal">
                                 ${tech.subtechniques.map(sub => `
-                                    <div class="subtechnique-card" onclick="event.stopPropagation(); showTechniqueDetails('${sub.id}')">
+                                    <div class="subtechnique-card" onclick="showTechniqueDetails('${sub.id}')">
                                         <div class="subtechnique-card-id">${sub.id}</div>
                                         <div class="subtechnique-card-name">${sub.name}</div>
                                         ${sub.platforms && sub.platforms.length > 0 ? `
