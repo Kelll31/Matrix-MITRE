@@ -27,6 +27,7 @@
             color: #fff;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             overflow-x: hidden;
+            min-height: 100vh;
         }
 
         /* Navbar */
@@ -53,7 +54,7 @@
         }
 
         .header h1 {
-            font-size: 3rem;
+            font-size: 2.5rem;
             font-weight: 800;
             margin-bottom: 10px;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
@@ -72,6 +73,7 @@
             padding: 20px;
             margin-bottom: 20px;
             transition: all 0.3s ease;
+            text-align: center;
         }
 
         .stat-card:hover {
@@ -119,16 +121,6 @@
             cursor: not-allowed;
         }
 
-        .btn-info-custom {
-            background: var(--accent);
-            color: white;
-        }
-
-        .btn-info-custom:hover {
-            background: #0d2847;
-            color: white;
-        }
-
         /* Search Bar */
         .search-container {
             margin: 30px 0;
@@ -155,10 +147,10 @@
             outline: none;
         }
 
-        /* Tactic Grid */
-        .tactic-grid {
+        /* Matrix Grid */
+        .matrix-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 20px;
             margin-top: 30px;
             padding: 0 20px;
@@ -168,11 +160,15 @@
             background: linear-gradient(135deg, rgba(15, 52, 96, 0.8), rgba(22, 33, 62, 0.8));
             border: 2px solid var(--accent);
             border-radius: 10px;
-            padding: 20px;
+            padding: 25px;
             cursor: pointer;
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
+            min-height: 150px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
 
         .tactic-card:hover {
@@ -198,22 +194,33 @@
         }
 
         .tactic-name {
-            font-size: 1.3rem;
+            font-size: 1.4rem;
             font-weight: 700;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
             color: #4ecdc4;
+            position: relative;
+            z-index: 1;
         }
 
         .tactic-count {
-            font-size: 0.9rem;
+            font-size: 1.1rem;
             color: #aaa;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .tactic-count .count-number {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #ff6b6b;
         }
 
         .tactic-count i {
             color: #ff6b6b;
+            font-size: 1.5rem;
         }
 
         /* Technique List */
@@ -223,6 +230,37 @@
             padding: 30px;
             margin: 30px 20px;
             border-left: 5px solid #ff6b6b;
+        }
+
+        .technique-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid rgba(255, 107, 107, 0.3);
+        }
+
+        .technique-header h2 {
+            color: #4ecdc4;
+            margin: 0;
+            font-size: 1.8rem;
+        }
+
+        .back-btn {
+            background: linear-gradient(90deg, #ff6b6b, #ff8e8e);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .back-btn:hover {
+            background: linear-gradient(90deg, #e94560, #ff6b6b);
+            transform: scale(1.05);
         }
 
         .technique-item {
@@ -244,7 +282,7 @@
         .technique-id {
             color: #4ecdc4;
             font-weight: 600;
-            font-size: 0.85rem;
+            font-size: 0.9rem;
             margin-bottom: 5px;
         }
 
@@ -292,11 +330,6 @@
             transform: translateX(5px);
         }
 
-        /* Loading */
-        .spinner-border {
-            color: #4ecdc4;
-        }
-
         /* Controls */
         .controls {
             display: flex;
@@ -307,7 +340,21 @@
             padding: 0 20px;
         }
 
-        /* Status Info */
+        .controls select {
+            padding: 10px 15px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid var(--accent);
+            color: white;
+            font-weight: 500;
+        }
+
+        .controls select:focus {
+            outline: none;
+            border-color: #4ecdc4;
+        }
+
+        /* Status */
         .status-info {
             background: rgba(255, 107, 107, 0.1);
             border: 1px solid rgba(255, 107, 107, 0.3);
@@ -325,27 +372,7 @@
             color: #11b856;
         }
 
-        /* Responsive */
-        @media (max-width: 768px) {
-            .header h1 {
-                font-size: 2rem;
-            }
-
-            .tactic-grid {
-                grid-template-columns: 1fr;
-                padding: 0 10px;
-            }
-
-            .controls {
-                flex-direction: column;
-            }
-
-            .controls .btn-custom {
-                width: 100%;
-            }
-        }
-
-        /* Loading spinner */
+        /* Loading */
         .loading {
             text-align: center;
             padding: 40px;
@@ -375,6 +402,27 @@
             color: #888;
             margin-top: 40px;
         }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .matrix-grid {
+                grid-template-columns: 1fr;
+                padding: 0 10px;
+            }
+
+            .controls {
+                flex-direction: column;
+            }
+
+            .controls .btn-custom,
+            .controls select {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
@@ -391,7 +439,7 @@
     <!-- Header -->
     <div class="header">
         <h1><i class="fas fa-map"></i> MITRE ATT&CK Matrix Viewer</h1>
-        <p>Интерактивный просмотр техник и тактик кибератак</p>
+        <p>Интерактивный просмотр техник и тактик киберата</p>
     </div>
 
     <!-- Main Content -->
@@ -406,7 +454,7 @@
             <button class="btn btn-refresh btn-custom" id="refresh-btn" onclick="refreshMatrix()">
                 <i class="fas fa-sync-alt"></i> Обновить матрицу
             </button>
-            <select class="form-select" id="interval-select" style="max-width: 200px; background: rgba(255,255,255,0.1); border: 2px solid var(--accent); color: white;" onchange="changeUpdateInterval()">
+            <select class="form-select" id="interval-select" style="max-width: 200px;" onchange="changeUpdateInterval()">
                 <option value="1_hour">Каждый час</option>
                 <option value="6_hours">Каждые 6 часов</option>
                 <option value="12_hours">Каждые 12 часов</option>
@@ -425,8 +473,8 @@
             <!-- Будет заполнено JavaScript -->
         </div>
 
-        <!-- Tactics Grid -->
-        <div class="tactic-grid" id="tactics-container">
+        <!-- Matrix Grid -->
+        <div class="matrix-grid" id="tactics-container">
             <!-- Будет заполнено JavaScript -->
         </div>
 
@@ -444,6 +492,7 @@
     <script>
         const API_BASE = '/api';
         let currentMatrix = null;
+        let currentStats = null;
 
         // Загрузка матрицы при загрузке страницы
         document.addEventListener('DOMContentLoaded', async () => {
@@ -460,11 +509,11 @@
                 ]);
 
                 currentMatrix = matrixRes.data;
-                const stats = statsRes.data;
+                currentStats = statsRes.data;
 
-                displayStats(stats);
+                displayStats(currentStats);
                 displayTactics(currentMatrix.tactics, currentMatrix.matrix);
-                updateStatus('success', `Обновлено: ${new Date(stats.last_update).toLocaleString('ru-RU')}`);
+                updateStatus('success', `Обновлено: ${new Date(currentStats.last_update).toLocaleString('ru-RU')}`);
 
             } catch (error) {
                 console.error('Ошибка загрузки:', error);
@@ -506,51 +555,76 @@
             const container = document.getElementById('tactics-container');
             container.innerHTML = '';
 
-            Object.entries(tactics).forEach(([key, tactic]) => {
-                const count = (matrix[key] || []).length;
-                const card = document.createElement('div');
-                card.className = 'tactic-card';
-                card.innerHTML = `
-                    <div class="tactic-name">${tactic.name}</div>
-                    <div class="tactic-count">
-                        <i class="fas fa-layer-group"></i> ${count} техник
-                    </div>
-                `;
-                card.onclick = () => showTechniques(key, tactic.name, matrix[key]);
-                container.appendChild(card);
+            // Правильный порядок тактик в матрице MITRE ATT&CK
+            const tacticOrder = [
+                'reconnaissance', 'resource-development', 'initial-access',
+                'execution', 'persistence', 'privilege-escalation',
+                'defense-evasion', 'credential-access', 'discovery',
+                'collection', 'command-and-control', 'exfiltration',
+                'impact'
+            ];
+
+            // Отображаем в правильном порядке
+            tacticOrder.forEach(tacticKey => {
+                if (tactics[tacticKey]) {
+                    const tactic = tactics[tacticKey];
+                    const count = (matrix[tacticKey] || []).length;
+                    const card = document.createElement('div');
+                    card.className = 'tactic-card';
+                    card.innerHTML = `
+                        <div>
+                            <div class="tactic-name">${tactic.name}</div>
+                        </div>
+                        <div class="tactic-count">
+                            <i class="fas fa-layer-group"></i>
+                            <span class="count-number">${count}</span>
+                            <span>техник</span>
+                        </div>
+                    `;
+                    card.onclick = () => showTechniques(tacticKey, tactic.name, matrix[tacticKey] || []);
+                    container.appendChild(card);
+                }
             });
         }
 
         function showTechniques(tacticKey, tacticName, techniques) {
             const container = document.getElementById('technique-container');
-            let html = `<h2 style="color: #4ecdc4; margin-bottom: 20px;"><i class="fas fa-layer-group"></i> ${tacticName}</h2>`;
             
-            techniques.forEach(tech => {
-                html += `
-                    <div class="technique-item">
-                        <div class="technique-id">${tech.id}</div>
-                        <div class="technique-name">${tech.name}</div>
-                        <div class="technique-platforms">
-                            ${tech.platforms.map(p => `<span class="platform-badge">${p}</span>`).join('')}
+            let html = `
+                <div class="technique-header">
+                    <h2><i class="fas fa-layer-group"></i> ${tacticName}</h2>
+                    <button class="back-btn" onclick="goBackToMatrix()">
+                        <i class="fas fa-arrow-left"></i> Вернуться
+                    </button>
+                </div>
+            `;
+            
+            if (techniques.length === 0) {
+                html += '<p style="text-align: center; color: #aaa; padding: 20px;">Нет техник в этой тактике</p>';
+            } else {
+                techniques.forEach(tech => {
+                    html += `
+                        <div class="technique-item">
+                            <div class="technique-id">${tech.id}</div>
+                            <div class="technique-name">${tech.name}</div>
+                            <div class="technique-platforms">
+                                ${tech.platforms.map(p => `<span class="platform-badge">${p}</span>`).join('')}
+                            </div>
                         </div>
-                    </div>
-                `;
-            });
+                    `;
+                });
+            }
 
             container.innerHTML = html;
             container.style.display = 'block';
             document.getElementById('tactics-container').style.display = 'none';
             document.getElementById('search-results').style.display = 'none';
+        }
 
-            // Кнопка возврата
-            const backBtn = document.createElement('button');
-            backBtn.className = 'btn btn-refresh btn-custom';
-            backBtn.innerHTML = '<i class="fas fa-arrow-left"></i> Вернуться';
-            backBtn.onclick = () => {
-                container.style.display = 'none';
-                document.getElementById('tactics-container').style.display = 'grid';
-            };
-            container.insertBefore(backBtn, container.firstChild);
+        function goBackToMatrix() {
+            document.getElementById('technique-container').style.display = 'none';
+            document.getElementById('tactics-container').style.display = 'grid';
+            document.getElementById('search-results').style.display = 'none';
         }
 
         async function searchTechniques() {
