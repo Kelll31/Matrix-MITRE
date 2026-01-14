@@ -89,7 +89,9 @@ async def download_matrix() -> Optional[Dict]:
         logger.info("📥 Загружаю матрицу MITRE с GitHub...")
 
         async with aiohttp.ClientSession() as session:
-            async with session.get(GITHUB_URL, timeout=aiohttp.ClientTimeout(total=60)) as response:
+            async with session.get(
+                GITHUB_URL, timeout=aiohttp.ClientTimeout(total=60)
+            ) as response:
                 if response.status != 200:
                     logger.error(f"❌ Ошибка загрузки: статус {response.status}")
                     return None
@@ -190,7 +192,9 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
                     matrix[tactic].append(technique_obj)
 
         # Подсчёт статистики
-        total_subtechniques = sum(len(t["subtechniques"]) for t in sum(matrix.values(), []))
+        total_subtechniques = sum(
+            len(t["subtechniques"]) for t in sum(matrix.values(), [])
+        )
 
         return {
             "tactics": tactics,
@@ -378,7 +382,11 @@ async def get_statistics() -> MatrixStats:
     stats = app.state.state.matrix_data.get("statistics", {})
 
     interval_str = next(
-        (k for k, v in UPDATE_INTERVALS.items() if v == app.state.state.update_interval),
+        (
+            k
+            for k, v in UPDATE_INTERVALS.items()
+            if v == app.state.state.update_interval
+        ),
         "24_hours",
     )
 
@@ -386,9 +394,11 @@ async def get_statistics() -> MatrixStats:
         total_tactics=stats.get("total_tactics", 0),
         total_techniques=stats.get("total_techniques", 0),
         total_subtechniques=stats.get("total_subtechniques", 0),
-        last_update=app.state.state.last_update.isoformat()
-        if app.state.state.last_update
-        else None,
+        last_update=(
+            app.state.state.last_update.isoformat()
+            if app.state.state.last_update
+            else None
+        ),
         update_interval=interval_str,
         is_updating=app.state.state.is_updating,
         update_count=app.state.state.update_count,
