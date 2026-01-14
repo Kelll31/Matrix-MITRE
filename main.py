@@ -12,7 +12,7 @@ import logging
 from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Dict, List, Optional
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
@@ -65,16 +65,20 @@ class MatrixStats(BaseModel):
     last_update: Optional[str]
     update_interval: str
     is_updating: bool
+    update_count: int
 
 
 class Technique(BaseModel):
     id: str
     name: str
     platforms: List[str]
+    subtechniques: Optional[List["Technique"]] = None
 
 
 class TacticData(BaseModel):
     name: str
+    shortname: str
+    description: str
     techniques: List[Technique]
 
 
@@ -90,7 +94,6 @@ async def download_matrix() -> Optional[Dict]:
                     logger.error(f"❌ Ошибка загрузки: статус {response.status}")
                     return None
 
-                # GitHub raw может отдать text/plain; читаем как текст и парсим вручную
                 text = await response.text()
                 try:
                     data = json.loads(text)
@@ -107,7 +110,7 @@ async def download_matrix() -> Optional[Dict]:
 
 
 def parse_matrix(raw_data: Dict) -> Optional[Dict]:
-    """Парсит матрицу из сырых данных"""
+    """Парсит матрицу из сырых данных с иерархией: Тактика -> Техника -> Подтехника"""
 
     try:
         techniques: Dict[str, Dict] = {}
@@ -122,7 +125,7 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
             obj_type = obj.get("type", "")
 
             if obj_type == "x-mitre-tactic":
-                tactic_name = obj.get("name", "Unknown").lower()
+                tactic_name = obj.get("name", "Unknown").lower().replace(" ", "-")
                 tactics[tactic_name] = {
                     "name": obj.get("name", "Unknown"),
                     "description": obj.get("description", ""),
@@ -138,7 +141,6 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
                 external_refs = obj.get("external_references", [])
                 external_id = "N/A"
                 if external_refs:
-                    # Берём первый external_id, если он есть
                     external_id = external_refs[0].get("external_id", "N/A")
 
                 tech_data = {
@@ -154,23 +156,29 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
                 else:
                     techniques[obj.get("id")] = tech_data
 
-        # Второй проход: строим матрицу
+        # Второй проход: строим матрицу с подтехниками
         for tech_id, technique in techniques.items():
-            for tactic in technique["tactics"]:
-                if tactic in matrix:
-                    matrix[tactic].append(
+            technique_subtechniques = []
+            for subtech_id, subtech in subtechniques.items():
+                if subtech["id"].startswith(technique["id"]):
+                    technique_subtechniques.append(
                         {
-                            "id": technique["id"],
-                            "name": technique["name"],
-                            "platforms": technique["platforms"],
+                            "id": subtech["id"],
+                            "name": subtech["name"],
+                            "platforms": subtech["platforms"],
                         }
                     )
 
-        # Связываем подтехники
-        for subtech_id, subtech in subtechniques.items():
-            for tech_id, technique in techniques.items():
-                if subtech["id"].startswith(technique["id"]):
-                    technique.setdefault("subtechniques", []).append(subtech)
+            technique_obj = {
+                "id": technique["id"],
+                "name": technique["name"],
+                "platforms": technique["platforms"],
+                "subtechniques": technique_subtechniques,
+            }
+
+            for tactic in technique["tactics"]:
+                if tactic in matrix:
+                    matrix[tactic].append(technique_obj)
 
         return {
             "tactics": tactics,
@@ -178,7 +186,7 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
             "statistics": {
                 "total_tactics": len(tactics),
                 "total_techniques": len(techniques),
-                "total_subtechniques": len(subtechniques),
+                "total_subtechniques": len(subtechstances := subtechniques),
             },
         }
 
@@ -252,8 +260,7 @@ async def update_matrix_task() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Управление жизненным циклом приложения - НОВЫЙ СТИЛЬ"""
-    
-    # Инициализация приложения (startup)
+
     app.state.state = AppState()
     logger.info("🚀 Запуск приложения...")
 
@@ -271,16 +278,13 @@ async def lifespan(app: FastAPI):
                 app.state.state.last_update = datetime.now()
                 save_to_cache(parsed_data)
 
-    # Запуск фоновой задачи
     asyncio.create_task(update_matrix_task())
-    
-    yield  # Приложение работает здесь
-    
-    # Завершение (shutdown)
+
+    yield
+
     logger.info("🛑 Завершение работы приложения...")
 
 
-# Инициализация FastAPI с нововым lifespan
 app = FastAPI(
     title="MITRE ATT&CK Matrix API",
     description="API для работы с матрицей MITRE ATT&CK",
@@ -288,7 +292,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -300,8 +303,6 @@ app.add_middleware(
 
 @app.get("/", response_model=None)
 async def root():
-    """Возвращает главную страницу"""
-
     html_path = Path("frontend/index.html")
     if html_path.exists():
         return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
@@ -310,8 +311,6 @@ async def root():
 
 @app.get("/api/matrix", tags=["Matrix"])
 async def get_matrix() -> Dict:
-    """Получить полную матрицу"""
-
     if not app.state.state.matrix_data:
         raise HTTPException(status_code=503, detail="Матрица еще не загружена")
     return app.state.state.matrix_data
@@ -319,8 +318,6 @@ async def get_matrix() -> Dict:
 
 @app.get("/api/matrix/tactics", tags=["Matrix"])
 async def get_tactics() -> Dict:
-    """Получить список тактик"""
-
     if not app.state.state.matrix_data:
         raise HTTPException(status_code=503, detail="Матрица еще не загружена")
     return app.state.state.matrix_data.get("tactics", {})
@@ -328,24 +325,41 @@ async def get_tactics() -> Dict:
 
 @app.get("/api/matrix/tactic/{tactic}", tags=["Matrix"])
 async def get_tactic(tactic: str) -> Dict:
-    """Получить техники конкретной тактики"""
-
     if not app.state.state.matrix_data:
         raise HTTPException(status_code=503, detail="Матрица еще не загружена")
 
-    tactic_lower = tactic.lower()
+    tactic_lower = tactic.lower().replace(" ", "-")
     matrix = app.state.state.matrix_data.get("matrix", {})
+    tactics = app.state.state.matrix_data.get("tactics", {})
 
     if tactic_lower not in matrix:
         raise HTTPException(status_code=404, detail=f"Тактика '{tactic}' не найдена")
 
-    return {"tactic": tactic, "techniques": matrix[tactic_lower]}
+    return {"tactic": tactics.get(tactic_lower, {}), "techniques": matrix[tactic_lower]}
+
+
+@app.get("/api/matrix/technique/{technique_id}", tags=["Matrix"])
+async def get_technique(technique_id: str) -> Dict:
+    if not app.state.state.matrix_data:
+        raise HTTPException(status_code=503, detail="Матрица еще не загружена")
+
+    matrix = app.state.state.matrix_data.get("matrix", {})
+
+    for tactic_key, techniques in matrix.items():
+        for tech in techniques:
+            if tech["id"].lower() == technique_id.lower():
+                return {
+                    "technique_id": technique_id,
+                    "name": tech["name"],
+                    "platforms": tech["platforms"],
+                    "subtechniques": tech.get("subtechniques", []),
+                }
+
+    raise HTTPException(status_code=404, detail=f"Техника '{technique_id}' не найдена")
 
 
 @app.get("/api/statistics", tags=["Statistics"])
 async def get_statistics() -> MatrixStats:
-    """Получить статистику"""
-
     if not app.state.state.matrix_data:
         raise HTTPException(status_code=503, detail="Матрица еще не загружена")
 
@@ -365,13 +379,12 @@ async def get_statistics() -> MatrixStats:
         else None,
         update_interval=interval_str,
         is_updating=app.state.state.is_updating,
+        update_count=app.state.state.update_count,
     )
 
 
 @app.post("/api/settings/update-interval", tags=["Settings"])
 async def set_update_interval(request: UpdateIntervalRequest) -> Dict:
-    """Изменить интервал обновления"""
-
     if request.interval not in UPDATE_INTERVALS:
         raise HTTPException(
             status_code=400,
@@ -390,8 +403,6 @@ async def set_update_interval(request: UpdateIntervalRequest) -> Dict:
 
 @app.post("/api/matrix/refresh", tags=["Matrix"])
 async def refresh_matrix() -> Dict:
-    """Принудительное обновление матрицы"""
-
     if app.state.state.is_updating:
         raise HTTPException(status_code=429, detail="Обновление уже в процессе")
 
@@ -418,8 +429,6 @@ async def refresh_matrix() -> Dict:
 
 @app.get("/api/search", tags=["Search"])
 async def search_techniques(q: str) -> Dict:
-    """Поиск техник по названию или ID"""
-
     if not app.state.state.matrix_data:
         raise HTTPException(status_code=503, detail="Матрица еще не загружена")
 
