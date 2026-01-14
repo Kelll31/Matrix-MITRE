@@ -1,0 +1,489 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "MITRE ATT&CK Matrix API",
+        "description": "API для работы с матрицей MITRE ATT&CK",
+        "version": "1.0.0"
+    },
+    "paths": {
+        "/": {
+            "get": {
+                "summary": "Root",
+                "operationId": "root__get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/matrix": {
+            "get": {
+                "tags": [
+                    "Matrix"
+                ],
+                "summary": "Get Matrix",
+                "operationId": "get_matrix_api_matrix_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": true,
+                                    "type": "object",
+                                    "title": "Response Get Matrix Api Matrix Get"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/matrix/tactics": {
+            "get": {
+                "tags": [
+                    "Matrix"
+                ],
+                "summary": "Get Tactics",
+                "operationId": "get_tactics_api_matrix_tactics_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": true,
+                                    "type": "object",
+                                    "title": "Response Get Tactics Api Matrix Tactics Get"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/matrix/tactic/{tactic}": {
+            "get": {
+                "tags": [
+                    "Matrix"
+                ],
+                "summary": "Get Tactic",
+                "operationId": "get_tactic_api_matrix_tactic__tactic__get",
+                "parameters": [
+                    {
+                        "name": "tactic",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tactic"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": true,
+                                    "title": "Response Get Tactic Api Matrix Tactic  Tactic  Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/matrix/technique/{technique_id}": {
+            "get": {
+                "tags": [
+                    "Matrix"
+                ],
+                "summary": "Get Technique",
+                "description": "Получить технику или подтехнику по ID (T1234 или T1234.001, etc)\nИспользует индексы для быстрого поиска",
+                "operationId": "get_technique_api_matrix_technique__technique_id__get",
+                "parameters": [
+                    {
+                        "name": "technique_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Technique Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": true,
+                                    "title": "Response Get Technique Api Matrix Technique  Technique Id  Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/statistics": {
+            "get": {
+                "tags": [
+                    "Statistics"
+                ],
+                "summary": "Get Statistics",
+                "operationId": "get_statistics_api_statistics_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MatrixStats"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/settings/update-interval": {
+            "post": {
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Set Update Interval",
+                "operationId": "set_update_interval_api_settings_update_interval_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateIntervalRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": true,
+                                    "type": "object",
+                                    "title": "Response Set Update Interval Api Settings Update Interval Post"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/matrix/refresh": {
+            "post": {
+                "tags": [
+                    "Matrix"
+                ],
+                "summary": "Refresh Matrix",
+                "operationId": "refresh_matrix_api_matrix_refresh_post",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": true,
+                                    "type": "object",
+                                    "title": "Response Refresh Matrix Api Matrix Refresh Post"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/search": {
+            "get": {
+                "tags": [
+                    "Search"
+                ],
+                "summary": "Search Techniques",
+                "description": "Поиск техник по названию, ID, описанию или платформам.\nq: строка для поиска\nlimit: максимум результатов (по умолчанию 20, макс 100)",
+                "operationId": "search_techniques_api_search_get",
+                "parameters": [
+                    {
+                        "name": "q",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1,
+                            "title": "Q"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 100,
+                            "minimum": 1,
+                            "default": 20,
+                            "title": "Limit"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": true,
+                                    "title": "Response Search Techniques Api Search Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/matrix/tactics/{tactic}/techniques": {
+            "get": {
+                "tags": [
+                    "Matrix"
+                ],
+                "summary": "Get Tactic Techniques",
+                "description": "Получить все техники тактики с опциональной фильтрацией по платформе",
+                "operationId": "get_tactic_techniques_api_matrix_tactics__tactic__techniques_get",
+                "parameters": [
+                    {
+                        "name": "tactic",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tactic"
+                        }
+                    },
+                    {
+                        "name": "platform",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Platform"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "title": "Limit"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": true,
+                                    "title": "Response Get Tactic Techniques Api Matrix Tactics  Tactic  Techniques Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "HTTPValidationError": {
+                "properties": {
+                    "detail": {
+                        "items": {
+                            "$ref": "#/components/schemas/ValidationError"
+                        },
+                        "type": "array",
+                        "title": "Detail"
+                    }
+                },
+                "type": "object",
+                "title": "HTTPValidationError"
+            },
+            "MatrixStats": {
+                "properties": {
+                    "total_tactics": {
+                        "type": "integer",
+                        "title": "Total Tactics"
+                    },
+                    "total_techniques": {
+                        "type": "integer",
+                        "title": "Total Techniques"
+                    },
+                    "total_subtechniques": {
+                        "type": "integer",
+                        "title": "Total Subtechniques"
+                    },
+                    "last_update": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Last Update"
+                    },
+                    "update_interval": {
+                        "type": "string",
+                        "title": "Update Interval"
+                    },
+                    "is_updating": {
+                        "type": "boolean",
+                        "title": "Is Updating"
+                    },
+                    "update_count": {
+                        "type": "integer",
+                        "title": "Update Count"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "total_tactics",
+                    "total_techniques",
+                    "total_subtechniques",
+                    "last_update",
+                    "update_interval",
+                    "is_updating",
+                    "update_count"
+                ],
+                "title": "MatrixStats"
+            },
+            "UpdateIntervalRequest": {
+                "properties": {
+                    "interval": {
+                        "type": "string",
+                        "title": "Interval"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "interval"
+                ],
+                "title": "UpdateIntervalRequest"
+            },
+            "ValidationError": {
+                "properties": {
+                    "loc": {
+                        "items": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "integer"
+                                }
+                            ]
+                        },
+                        "type": "array",
+                        "title": "Location"
+                    },
+                    "msg": {
+                        "type": "string",
+                        "title": "Message"
+                    },
+                    "type": {
+                        "type": "string",
+                        "title": "Error Type"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "loc",
+                    "msg",
+                    "type"
+                ],
+                "title": "ValidationError"
+            }
+        }
+    }
+}
