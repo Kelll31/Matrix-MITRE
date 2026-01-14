@@ -139,8 +139,16 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
                 tactic_names = [kc.get("phase_name", "").lower() for kc in kill_chain]
 
                 external_refs = obj.get("external_references", [])
+
+                # Ищем именно ATT&CK ID (Txxxx/Txxxx.yy), игнорируя другие external_id
                 external_id = "N/A"
-                if external_refs:
+                for ref in external_refs:
+                    source_name = ref.get("source_name", "").lower()
+                    if source_name in {"mitre-attack", "attack", "mitre"}:
+                        external_id = ref.get("external_id", external_id)
+                        break
+                if external_id == "N/A" and external_refs:
+                    # Фолбэк на первый, если профильный не нашли
                     external_id = external_refs[0].get("external_id", "N/A")
 
                 tech_data = {
@@ -160,7 +168,8 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
         for tech_id, technique in techniques.items():
             technique_subtechniques = []
             for subtech_id, subtech in subtechniques.items():
-                if subtech["id"].startswith(technique["id"]):
+                # Сравниваем ATT&CK ID подптехники и техники по префиксу (T1234.xx начинается с T1234)
+                if subtech["id"].startswith(technique["id"] + "."):
                     technique_subtechniques.append(
                         {
                             "id": subtech["id"],
@@ -180,13 +189,16 @@ def parse_matrix(raw_data: Dict) -> Optional[Dict]:
                 if tactic in matrix:
                     matrix[tactic].append(technique_obj)
 
+        # Подсчёт статистики
+        total_subtechniques = sum(len(t["subtechniques"]) for t in sum(matrix.values(), []))
+
         return {
             "tactics": tactics,
             "matrix": matrix,
             "statistics": {
                 "total_tactics": len(tactics),
                 "total_techniques": len(techniques),
-                "total_subtechniques": len(subtechstances := subtechniques),
+                "total_subtechniques": total_subtechniques,
             },
         }
 
